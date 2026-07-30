@@ -1,0 +1,22 @@
+{
+  "name": "money-mirror",
+  "version": "0.1.0",
+  "description": "A local-first qualitative finance tracker with transparent irregularity detection and Anthropic reflections.",
+  "type": "module",
+  "bin": {
+    "money-mirror": "./bin/money-mirror.js"
+  },
+  "scripts": {
+    "test": "node --test",
+    "test:coverage": "node --test --experimental-test-coverage --test-coverage-lines=80 --test-coverage-functions=80 --test-coverage-branches=80",
+    "lint": "node --check bin/money-mirror.js && node --check src/*.js && node --check scripts/*.js",
+    "security:check": "node scripts/security-check.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "0.115.0",
+    "csv-parse": "6.1.0"
+  }
+}
