@@ -1,7 +1,6 @@
 node_modules/
 .env
 .env.*
-!.env.example
 coverage/
 *.[cC][sS][vV]
 !/demo/statement.csv

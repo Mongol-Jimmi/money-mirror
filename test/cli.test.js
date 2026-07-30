@@ -40,7 +40,7 @@ test('runs the import, status, anomalies, and label journey', async () => {
   assert.match(labelled.text(), /Learned expected/);
 });
 
-test('previews Anthropic data, requires approval, and prints structured reflection', async () => {
+test('previews Claude data, requires approval, and prints structured reflection', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'money-mirror-reflect-'));
   const dataHome = path.join(root, 'data');
   const csvPath = path.join(root, 'statement.csv');
@@ -54,7 +54,7 @@ test('previews Anthropic data, requires approval, and prints structured reflecti
 
   const reflected = capture();
   const reflector = async () => ({
-    summary: 'One unfamiliar purchase appeared.',
+    summary: 'One \u001b[2Junfamiliar purchase appeared.',
     observations: [{
       transactionId: 'sample-id',
       interpretation: 'This differs from prior activity.',
@@ -64,8 +64,8 @@ test('previews Anthropic data, requires approval, and prints structured reflecti
     questions: ['Was this planned?'],
   });
   await run(['reflect', '--yes'], reflected.io, { home: dataHome, reflector });
-  assert.doesNotMatch(reflected.text(), /camera shop/);
-  assert.match(reflected.text(), /One unfamiliar purchase appeared/);
+  assert.doesNotMatch(reflected.text(), /camera shop|\u001b/);
+  assert.match(reflected.text(), /One \\u001b\[2Junfamiliar purchase appeared/);
   assert.match(reflected.text(), /First observed merchant/);
   assert.match(reflected.text(), /Was this planned/);
 });

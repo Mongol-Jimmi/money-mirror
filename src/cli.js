@@ -1,7 +1,7 @@
 import { readFile, stat } from 'node:fs/promises';
 import { createInterface } from 'node:readline/promises';
 
-import { buildLlmPayload, requestReflection } from './anthropic.js';
+import { buildLlmPayload, requestReflection } from './claude.js';
 import { detectAnomalies } from './anomalies.js';
 import { parseStatement } from './csv.js';
 import { importTransactions, loadState, recordFeedback } from './store.js';
@@ -32,7 +32,7 @@ Import options:
   --expenses-positive           Treat positive CSV amounts as expenses
 
 Labels: expected, necessary, treat, regret, ignore
-Environment: ANTHROPIC_API_KEY, ANTHROPIC_MODEL, MONEY_MIRROR_HOME
+Environment: CLAUDE_MODEL, MONEY_MIRROR_CLAUDE_BIN, MONEY_MIRROR_HOME
 `;
 
 function parseArguments(args) {
@@ -86,7 +86,7 @@ function formatMoney(cents) {
 async function confirmSend() {
   if (!process.stdin.isTTY) return false;
   const prompt = createInterface({ input: process.stdin, output: process.stdout });
-  const answer = await prompt.question('Send this payload to Anthropic? [y/N] ');
+  const answer = await prompt.question('Send this payload through Claude CLI? [y/N] ');
   prompt.close();
   return /^y(?:es)?$/i.test(answer.trim());
 }
@@ -102,15 +102,22 @@ function printAnomalies(anomalies, io) {
   }
 }
 
+function terminalSafe(value) {
+  return String(value).replace(
+    /[\u0000-\u001f\u007f-\u009f]/g,
+    (character) => `\\u${character.codePointAt(0).toString(16).padStart(4, '0')}`,
+  );
+}
+
 function printReflection(reflection, io) {
-  io.write(`\n${reflection.summary}\n`);
+  io.write(`\n${terminalSafe(reflection.summary)}\n`);
   for (const observation of reflection.observations) {
-    io.write(`\n[${observation.transactionId}] ${observation.interpretation} (${observation.confidence} confidence)\n`);
-    for (const evidence of observation.evidence) io.write(`  - ${evidence}\n`);
+    io.write(`\n[${terminalSafe(observation.transactionId)}] ${terminalSafe(observation.interpretation)} (${terminalSafe(observation.confidence)} confidence)\n`);
+    for (const evidence of observation.evidence) io.write(`  - ${terminalSafe(evidence)}\n`);
   }
   if (reflection.questions.length > 0) {
     io.write('\nQuestions for you:\n');
-    for (const question of reflection.questions) io.write(`  - ${question}\n`);
+    for (const question of reflection.questions) io.write(`  - ${terminalSafe(question)}\n`);
   }
 }
 
@@ -173,9 +180,9 @@ export async function run(args, io = process.stdout, options = {}) {
 
     const payload = buildLlmPayload(anomalies);
     if (flags.yes === true) {
-      io.write(`Sending ${payload.transactions.length} approved anomaly record${payload.transactions.length === 1 ? '' : 's'} to Anthropic.\n`);
+      io.write(`Sending ${payload.transactions.length} approved anomaly record${payload.transactions.length === 1 ? '' : 's'} through Claude CLI.\n`);
     } else {
-      io.write('Only the following payload will be sent to Anthropic:\n');
+      io.write('Only the following payload will be sent through Claude CLI:\n');
       io.write(`${JSON.stringify(payload, null, 2)}\n`);
     }
     const approved = flags.yes === true || await (options.confirm ?? confirmSend)();

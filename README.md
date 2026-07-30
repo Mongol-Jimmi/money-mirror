@@ -1,6 +1,6 @@
 # Money Mirror
 
-A local-first CLI that notices unusual spending, asks Anthropic for a qualitative reflection, and learns from your labels.
+A local-first CLI that notices unusual spending, asks your authenticated Claude CLI for a qualitative reflection, and learns from your labels.
 
 > Deterministic code identifies what changed. Claude asks what it might mean. You decide.
 
@@ -10,14 +10,14 @@ Money Mirror is a reflection tool, **not financial advice**. It never moves mone
 
 - Imports a CSV export into `~/.money-mirror/` with owner-only file permissions.
 - Detects unusual amounts, new merchants, and late recurring expenses with visible rules.
-- Shows the exact minimized payload before any Anthropic request.
+- Shows the exact minimized payload before sending it through Claude CLI.
 - Sends normalized merchant, date, amount, signal, and prior feedback label—not the raw CSV memo or private feedback note.
 - Learns merchant context from labels such as `expected`, `necessary`, `treat`, `regret`, and `ignore`.
 
 ## Requirements
 
 - Node.js 20 or newer
-- An [Anthropic API key](https://console.anthropic.com/settings/keys) for `reflect` only
+- A current installed and authenticated [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code/overview) with `--json-schema` and `--safe-mode` support for `reflect`
 - A single-currency CSV with date, description, and signed amount columns
 
 ## Install
@@ -29,13 +29,16 @@ npm ci
 npm link
 ```
 
-Set your Anthropic credentials in your shell; never commit them:
+Verify Claude CLI authentication—no API key is required by Money Mirror:
 
 ```bash
-export ANTHROPIC_API_KEY='your-key'
-# Optional; this is the current default:
-export ANTHROPIC_MODEL='claude-sonnet-5'
+claude --version
+claude auth status
+# If needed:
+claude auth login
 ```
+
+The default model alias is `sonnet`. Override it with `CLAUDE_MODEL`; use `MONEY_MIRROR_CLAUDE_BIN` if the executable is not named `claude`.
 
 ## Use
 
@@ -45,7 +48,7 @@ money-mirror anomalies
 money-mirror reflect
 ```
 
-`reflect` prints everything it plans to transmit and asks for confirmation. Use `--yes` only in trusted automation.
+`reflect` prints everything it plans to transmit and asks for confirmation. It passes the approved payload to Claude over stdin, disables Claude tools and session persistence, and requires structured JSON output. Use `--yes` only in trusted automation.
 
 Teach it what a transaction meant:
 
@@ -110,8 +113,8 @@ Money Mirror never deletes an old write lock automatically because doing so coul
 - Raw transactions stay under `~/.money-mirror/` unless `MONEY_MIRROR_HOME` overrides it.
 - Money Mirror refuses to use a data directory inside a Git worktree.
 - Local files are created with directory mode `0700` and file mode `0600`; writes are atomic and serialized.
-- The Anthropic preview can still contain sensitive merchant, date, and amount data. Review it.
-- Do not put bank CSVs, local state, or API keys in Git. The repository ignores CSV and environment files by default.
+- The Claude preview can still contain sensitive merchant, date, and amount data. Review it; approved context leaves your machine and is processed by Anthropic under your Claude account settings.
+- Do not put bank CSVs or local state in Git. The repository ignores CSV and environment files by default.
 - The MVP assumes one currency and signed amounts; it does not reconcile balances or detect every irregularity.
 - Labels are qualitative memory, not model fine-tuning.
 

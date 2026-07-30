@@ -1,7 +1,7 @@
 {
   "name": "money-mirror",
   "version": "0.1.0",
-  "description": "A local-first qualitative finance tracker with transparent irregularity detection and Anthropic reflections.",
+  "description": "A local-first qualitative finance tracker with transparent irregularity detection and Claude CLI reflections.",
   "type": "module",
   "bin": {
     "money-mirror": "./bin/money-mirror.js"
@@ -16,7 +16,6 @@
     "node": ">=20"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "0.115.0",
     "csv-parse": "6.1.0"
   }
 }
