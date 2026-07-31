@@ -9,7 +9,7 @@ const tracked = execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8' })
   .filter(Boolean);
 const forbidden = tracked.filter((file) => {
   const name = path.basename(file);
-  if (name === 'ledger.json' || name === 'feedback.json') return true;
+  if (name === 'ledger.json' || name === 'feedback.json' || name === 'budget.json') return true;
   if (name === '.env' || name.startsWith('.env.')) return true;
   return file.toLowerCase().endsWith('.csv') && file !== 'demo/statement.csv';
 });

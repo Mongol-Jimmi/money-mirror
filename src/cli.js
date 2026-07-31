@@ -3,6 +3,13 @@ import { createInterface } from 'node:readline/promises';
 
 import { buildLlmPayload, requestReflection } from './claude.js';
 import { detectAnomalies } from './anomalies.js';
+import {
+  addRecurring,
+  buildDashboard,
+  categorizeTransaction,
+  formatMoney,
+  setEnvelope,
+} from './budget.js';
 import { parseStatement } from './csv.js';
 import { importTransactions, loadState, recordFeedback } from './store.js';
 
@@ -11,6 +18,11 @@ const ALLOWED_FLAGS = {
   import: new Set(['date-column', 'description-column', 'amount-column', 'date-format', 'expenses-positive']),
   status: new Set(),
   anomalies: new Set(),
+  transactions: new Set(['month']),
+  dashboard: new Set(['month']),
+  category: new Set(),
+  budget: new Set(),
+  recurring: new Set(['category']),
   reflect: new Set(['yes']),
   label: new Set(['note']),
 };
@@ -20,6 +32,11 @@ const HELP = `Money Mirror — qualitative finance reflection from your terminal
 Usage:
   money-mirror import <statement.csv> [options]
   money-mirror status
+  money-mirror transactions [--month YYYY-MM]
+  money-mirror dashboard [--month YYYY-MM]
+  money-mirror category <transaction-id> <category>
+  money-mirror budget set <category> <amount>
+  money-mirror recurring add <name> <amount> <due-day> [--category <category>]
   money-mirror anomalies
   money-mirror reflect [--yes]
   money-mirror label <transaction-id> <label> [--note "..."]
@@ -79,10 +96,6 @@ function anomaliesFor(state) {
   );
 }
 
-function formatMoney(cents) {
-  return `${cents < 0 ? '-' : ''}${(Math.abs(cents) / 100).toFixed(2)}`;
-}
-
 async function confirmSend() {
   if (!process.stdin.isTTY) return false;
   const prompt = createInterface({ input: process.stdin, output: process.stdout });
@@ -100,6 +113,44 @@ function printAnomalies(anomalies, io) {
     const signals = anomaly.signals.map((signal) => signal.type).join(', ');
     io.write(`[${anomaly.transactionId}] ${anomaly.date} ${formatMoney(anomaly.amountCents)} ${anomaly.merchant} — ${signals}\n`);
   }
+}
+
+function printTransactions(state, requestedMonth, io) {
+  const month = buildDashboard(state, requestedMonth).month;
+  const transactions = state.ledger.transactions
+    .filter((transaction) => transaction.date.startsWith(month))
+    .sort((a, b) => a.date.localeCompare(b.date));
+  if (transactions.length === 0) {
+    io.write(`No transactions found for ${month}.\n`);
+    return;
+  }
+  for (const transaction of transactions) {
+    const category = Object.hasOwn(state.budget.merchantCategories, transaction.merchant)
+      ? state.budget.merchantCategories[transaction.merchant]
+      : 'uncategorized';
+    io.write(`[${transaction.id}] ${transaction.date} ${formatMoney(transaction.amountCents)} ${terminalSafe(transaction.merchant)} [${terminalSafe(category)}]\n`);
+  }
+}
+
+function printDashboard(dashboard, irregularityCount, io) {
+  io.write(`Money Mirror dashboard - ${dashboard.month}\n`);
+  io.write(`Income: ${formatMoney(dashboard.incomeCents)}\n`);
+  io.write(`Spending: ${formatMoney(dashboard.spendingCents)}\n`);
+  io.write(`Net cash flow: ${formatMoney(dashboard.netCents)}\n`);
+  io.write(`Planned: ${formatMoney(dashboard.plannedCents)}\n`);
+  io.write(`Unassigned income: ${formatMoney(dashboard.unassignedCents)}\n`);
+  io.write('Envelopes:\n');
+  if (dashboard.categories.length === 0) io.write('  No envelopes configured.\n');
+  for (const category of dashboard.categories) {
+    io.write(`  ${terminalSafe(category.category)}: ${formatMoney(category.spentCents)} / ${formatMoney(category.budgetCents)} (${formatMoney(category.remainingCents)} remaining)\n`);
+  }
+  io.write(`Uncategorized: ${formatMoney(dashboard.uncategorizedCents)}\n`);
+  io.write('Recurring obligations:\n');
+  if (dashboard.recurring.length === 0) io.write('  None configured.\n');
+  for (const recurring of dashboard.recurring) {
+    io.write(`  ${terminalSafe(recurring.name)}: ${formatMoney(recurring.amountCents)} due day ${recurring.dueDay} [${terminalSafe(recurring.category)}]\n`);
+  }
+  io.write(`Latest irregularities: ${irregularityCount}\n`);
 }
 
 function terminalSafe(value) {
@@ -155,6 +206,47 @@ export async function run(args, io = process.stdout, options = {}) {
     const state = await loadState(home);
     io.write(`Transactions: ${state.ledger.transactions.length}\n`);
     io.write(`Learned merchant patterns: ${Object.keys(state.feedback).length}\n`);
+    io.write(`Budget envelopes: ${Object.keys(state.budget.envelopes).length}\n`);
+    io.write(`Recurring obligations: ${Object.keys(state.budget.recurring).length}\n`);
+    return 0;
+  }
+
+  if (command === 'transactions') {
+    printTransactions(await loadState(home), flags.month, io);
+    return 0;
+  }
+
+  if (command === 'dashboard') {
+    const state = await loadState(home);
+    printDashboard(buildDashboard(state, flags.month), anomaliesFor(state).length, io);
+    return 0;
+  }
+
+  if (command === 'category') {
+    const [idPrefix, category] = positional;
+    if (!idPrefix || !category) throw new Error('Category requires a transaction ID and category.');
+    const learned = await categorizeTransaction(idPrefix, category, home);
+    io.write(`Learned ${learned.category} for ${learned.transaction.merchant}.\n`);
+    return 0;
+  }
+
+  if (command === 'budget') {
+    const [action, category, amount] = positional;
+    if (action !== 'set' || !category || !amount) {
+      throw new Error('Usage: money-mirror budget set <category> <amount>.');
+    }
+    const envelope = await setEnvelope(category, amount, home);
+    io.write(`Budgeted ${formatMoney(envelope.amountCents)} for ${envelope.category}.\n`);
+    return 0;
+  }
+
+  if (command === 'recurring') {
+    const [action, name, amount, dueDay] = positional;
+    if (action !== 'add' || !name || !amount || !dueDay) {
+      throw new Error('Usage: money-mirror recurring add <name> <amount> <due-day>.');
+    }
+    const recurring = await addRecurring(name, amount, dueDay, flags.category, home);
+    io.write(`Saved ${terminalSafe(recurring.name)}: ${formatMoney(recurring.amountCents)} due day ${recurring.dueDay}.\n`);
     return 0;
   }
 

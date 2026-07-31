@@ -10,6 +10,8 @@ Money Mirror is a reflection tool, **not financial advice**. It never moves mone
 
 - Imports a CSV export into `~/.money-mirror/` with owner-only file permissions.
 - Detects unusual amounts, new merchants, and late recurring expenses with visible rules.
+- Adds zero-based category envelopes, learned merchant categories, recurring obligations, and a monthly cash-flow dashboard.
+- Keeps uncategorized spending visible instead of silently trusting automation.
 - Shows the exact minimized payload before sending it through Claude CLI.
 - Sends normalized merchant, date, amount, signal, and prior feedback label—not the raw CSV memo or private feedback note.
 - Learns merchant context from labels such as `expected`, `necessary`, `treat`, `regret`, and `ignore`.
@@ -44,6 +46,11 @@ The default model alias is `sonnet`. Override it with `CLAUDE_MODEL`; use `MONEY
 
 ```bash
 money-mirror import ~/Downloads/statement.csv
+money-mirror transactions --month 2026-07
+money-mirror category <transaction-id> groceries
+money-mirror budget set groceries 500
+money-mirror recurring add rent 1200 1 --category housing
+money-mirror dashboard --month 2026-07
 money-mirror anomalies
 money-mirror reflect
 ```
@@ -62,6 +69,8 @@ Inspect local state:
 ```bash
 money-mirror status
 ```
+
+The dashboard reports income, spending, net cash flow, planned envelopes, unassigned income, envelope usage, uncategorized spending, recurring obligations, and the latest irregularity count. Categories are learned per normalized merchant, so one correction applies to later imports.
 
 ### CSV variations
 
@@ -110,7 +119,7 @@ Money Mirror never deletes an old write lock automatically because doing so coul
 
 ## Privacy and limitations
 
-- Raw transactions stay under `~/.money-mirror/` unless `MONEY_MIRROR_HOME` overrides it.
+- Raw transactions, qualitative labels, budgets, category rules, and recurring obligations stay under `~/.money-mirror/` unless `MONEY_MIRROR_HOME` overrides it.
 - Money Mirror refuses to use a data directory inside a Git worktree.
 - Local files are created with directory mode `0700` and file mode `0600`; writes are atomic and serialized.
 - The Claude preview can still contain sensitive merchant, date, and amount data. Review it; approved context leaves your machine and is processed by Anthropic under your Claude account settings.

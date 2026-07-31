@@ -6,5 +6,6 @@ coverage/
 !/demo/statement.csv
 **/ledger.json
 **/feedback.json
+**/budget.json
 **/.write-lock/
 .money-mirror/

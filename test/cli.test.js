@@ -40,6 +40,45 @@ test('runs the import, status, anomalies, and label journey', async () => {
   assert.match(labelled.text(), /Learned expected/);
 });
 
+test('runs the budgeting, categorization, recurring, and dashboard journey', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'money-mirror-dashboard-'));
+  const dataHome = path.join(root, 'data');
+  const csvPath = path.join(root, 'statement.csv');
+  await writeFile(
+    csvPath,
+    'Date,Description,Amount\n2026-07-01,Salary,3000\n2026-07-03,Market,-400\n2026-07-04,Cafe,-50\n',
+  );
+  await run(['import', csvPath], capture().io, { home: dataHome });
+
+  const listed = capture();
+  await run(['transactions', '--month', '2026-07'], listed.io, { home: dataHome });
+  const marketId = listed.text().match(/\[([a-f0-9]+)\].*market/i)[1];
+
+  await run(['category', marketId, 'Groceries'], capture().io, { home: dataHome });
+  await run(['budget', 'set', 'Groceries', '500'], capture().io, { home: dataHome });
+  await run(['recurring', 'add', 'Rent', '1200', '1', '--category', 'Housing'], capture().io, { home: dataHome });
+
+  const dashboard = capture();
+  await run(['dashboard', '--month', '2026-07'], dashboard.io, { home: dataHome });
+  assert.match(dashboard.text(), /Income: 3000.00/);
+  assert.match(dashboard.text(), /Spending: 450.00/);
+  assert.match(dashboard.text(), /groceries: 400.00 \/ 500.00/);
+  assert.match(dashboard.text(), /Uncategorized: 50.00/);
+  assert.match(dashboard.text(), /Rent: 1200.00 due day 1/);
+});
+
+test('lists prototype-shaped merchants as uncategorized', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'money-mirror-prototype-'));
+  const dataHome = path.join(root, 'data');
+  const csvPath = path.join(root, 'statement.csv');
+  await writeFile(csvPath, 'Date,Description,Amount\n2026-07-01,constructor,-5\n');
+  await run(['import', csvPath], capture().io, { home: dataHome });
+
+  const listed = capture();
+  await run(['transactions'], listed.io, { home: dataHome });
+  assert.match(listed.text(), /constructor \[uncategorized\]/);
+});
+
 test('previews Claude data, requires approval, and prints structured reflection', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'money-mirror-reflect-'));
   const dataHome = path.join(root, 'data');

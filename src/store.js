@@ -9,6 +9,10 @@ const DEFAULT_HOME = path.join(os.homedir(), '.money-mirror');
 const LOCK_TIMEOUT_MS = 5_000;
 const LOCK_RETRY_MS = 25;
 
+function emptyBudget() {
+  return { envelopes: {}, merchantCategories: {}, recurring: {} };
+}
+
 async function readJson(filePath, fallback) {
   try {
     return JSON.parse(await readFile(filePath, 'utf8'));
@@ -146,11 +150,12 @@ export function resolveHome(override) {
 
 export async function loadState(homeOverride) {
   const home = await safeHomePath(resolveHome(homeOverride));
-  const [ledger, feedback] = await Promise.all([
+  const [ledger, feedback, budget] = await Promise.all([
     readJson(path.join(home, 'ledger.json'), { transactions: [], latestBatchId: null }),
     readJson(path.join(home, 'feedback.json'), {}),
+    readJson(path.join(home, 'budget.json'), emptyBudget()),
   ]);
-  return { ledger, feedback };
+  return { ledger, feedback, budget };
 }
 
 export async function importTransactions(transactions, homeOverride) {
@@ -173,6 +178,15 @@ export async function importTransactions(transactions, homeOverride) {
     };
     await writePrivateJson(path.join(home, 'ledger.json'), nextLedger);
     return { added: additions.length, batchId };
+  });
+}
+
+export async function updateBudgetSettings(update, homeOverride) {
+  return withWriteLock(resolveHome(homeOverride), async (home) => {
+    const current = await readJson(path.join(home, 'budget.json'), emptyBudget());
+    const next = update(current);
+    await writePrivateJson(path.join(home, 'budget.json'), next);
+    return next;
   });
 }
 
